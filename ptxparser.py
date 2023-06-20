@@ -20,7 +20,7 @@ FLT_LIT = F32_LIT | F64_LIT
 NUMERIC = BOOL_LIT | INT_LIT | FLT_LIT
 INTEGER = pyparsing_common.integer
 
-expr = infixNotation(NUMERIC,
+expr = infixNotation(NUMERIC | IDENTIFIER,
     [
         (oneOf('+ - ! ~'),       1, opAssoc.RIGHT),
         (oneOf('(.s64) (.u64)'), 1, opAssoc.RIGHT),
@@ -39,15 +39,7 @@ expr = infixNotation(NUMERIC,
     lpar=Literal("("),
     rpar=Literal(")")
 )
-# expr.parseString("(s64)123", True).pprint()
 
-
-
-# directives = [
-
-# ]
-
-# DIRECTIVE = oneOf(directives)
 
 TYPE = (
     oneOf(".s8 .s16 .s32 .s64") ^
@@ -70,11 +62,30 @@ KERNELDEF = (
     Literal(".entry") + IDENTIFIER + Suppress("(") + ARGLIST + Suppress(")")
 )
 
-REGDEF = (
-    Literal(".reg") + TYPE + IDENTIFIER + Literal("<") + INTEGER + Literal(">") + Literal(";")
+REGDEF = Group(
+    Literal(".reg") + TYPE + Group(delimitedList(IDENTIFIER + Optional(Suppress("<") + INTEGER + Suppress(">")))) + Suppress(";")
 )
 
 TOKEN = delimitedList(IDENTIFIER | NUMERIC, ".")
+
+instructions = [
+    "abs", "discard", "min", "shf", "vadd", "activemask", "div",
+    "mma", "shfl", "vadd2", "add", "dp2a", "mov", "shl", "vadd4", "addc", "dp4a",
+    "movmatrix", "shr", "vavrg2", "alloca", "elect", "mul", "sin", "vavrg4",
+    "and", "ex2", "mul24", "slct", "vmad", "applypriority", "exit", "multimem",
+    "sqrt", "vmax", "atom", "fence", "nanosleep", "st", "vmax2", "bar", "fma",
+    "neg", "stackrestore", "vmax4", "barrier", "fns", "not", "stacksave",
+    "vmin", "bfe", "getctarank", "or", "stmatrix", "vmin2", "bfi",
+    "griddepcontrol", "pmevent", "sub", "vmin4", "bfind", "isspacep", "popc",
+    "subc", "vote", "bmsk", "istypep", "prefetch", "suld", "vset", "bra", "ld",
+    "prefetchu", "suq", "vset2", "brev", "ldmatrix", "prmt", "sured", "vset4",
+    "brkpt", "ldu", "rcp", "sust", "vshl", "brx", "lg2", "red", "szext", "vshr",
+    "call", "lop3", "redux", "tanh", "vsub", "clz", "mad", "rem", "testp",
+    "vsub2", "cnot", "mad24", "ret", "tex", "vsub4", "copysign", "madc", "rsqrt",
+    "tld4", "wgmma", "cos", "mapa", "sad", "trap", "wmma", "cp", "match", "selp",
+    "txq", "xor", "createpolicy", "max", "set", "vabsdiff", "cvt", "mbarrier",
+    "setmaxnreg", "vabsdiff2", "cvta", "membar", "setp", "vabsdiff4",
+]
 
 INSTRUCTION = (
     (Literal("@") + IDENTIFIER + IDENTIFIER + IDENTIFIER + Literal(";")) |
@@ -85,8 +96,8 @@ INSTRUCTION = (
 KERNEL = (
     KERNELDEF +
     Suppress("{") +
-    ZeroOrMore(REGDEF) +
-    ZeroOrMore(INSTRUCTION) +
+    Group(ZeroOrMore(REGDEF)) +
+    Group(ZeroOrMore(INSTRUCTION)) +
     Suppress("}") 
 )
 
@@ -112,7 +123,6 @@ PTX.parseString("""
 	mov.u32 	%r4, %ntid.x;
 	mad.lo.s32 	%r5, %r3, %r4, %r2;
 	setp.lt.s32 	%p1, %r5, %r1;
-	@%p1 bra 	$L__BB0_2;
 	bra.uni 	$L__BB0_1;
 $L__BB0_2:
 	ld.param.u64 	%rd3, [square_kernel_param_0];
