@@ -20,7 +20,7 @@ FLT_LIT = F32_LIT | F64_LIT
 NUMERIC = BOOL_LIT | INT_LIT | FLT_LIT
 INTEGER = pyparsing_common.integer
 
-expr = infixNotation(NUMERIC | IDENTIFIER,
+EXPR = infixNotation(NUMERIC | IDENTIFIER,
     [
         (oneOf('+ - ! ~'),       1, opAssoc.RIGHT),
         (oneOf('(.s64) (.u64)'), 1, opAssoc.RIGHT),
@@ -87,10 +87,67 @@ instructions = [
     "setmaxnreg", "vabsdiff2", "cvta", "membar", "setp", "vabsdiff4",
 ]
 
-INSTRUCTION = (
-    (Literal("@") + IDENTIFIER + IDENTIFIER + IDENTIFIER + Literal(";")) |
-    (IDENTIFIER + Literal(":")) |
-    (TOKEN + Optional(DelimitedList(TOKEN | (Literal("[") + IDENTIFIER + Literal("]")))) + Literal(";"))
+def rangeNum(a:int, b:int):
+    return Word(nums).setParseAction(lambda t: a <= int(t[0]) <= b)
+
+# https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#special-registers
+SPECIAL_REGISTER = (
+    (Literal("%tid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%ntid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%laneid")) ^
+    (Literal("%warpid")) ^
+    (Literal("%nwarpid")) ^
+    (Literal("%ctaid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%nctaid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%simd")) ^
+    (Literal("%nsimd")) ^
+    (Literal("%gridd")) ^
+    (Literal("%is_explicit_cluster")) ^
+    (Literal("%clusterid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%nclusterid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%cluster_ctaid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%cluster_nctaid") + Optional(Literal(".") + oneOf("x y z"))) ^
+    (Literal("%cluster_ctarank")) ^
+    (Literal("%cluster_nctarank")) ^
+    (Literal("%lanemask_eq")) ^
+    (Literal("%lanemask_le")) ^
+    (Literal("%lanemask_lt")) ^
+    (Literal("%lanemask_ge")) ^
+    (Literal("%lanemask_gt")) ^
+    (Literal("%clock")) ^
+    (Literal("%clock_hi")) ^
+    (Literal("%clock64")) ^
+    (Literal("%pm") + rangeNum(0, 7)) ^
+    (Literal("%pm") + rangeNum(0, 7) + Literal("_64")) ^
+    (Literal("%envreg") + rangeNum(0, 31)) ^
+    (Literal("%globaltimer")) ^
+    (Literal("%globaltimer_lo")) ^
+    (Literal("%globaltimer_hi")) ^
+    (Literal("%reserved_smem_offset_begin")) ^
+    (Literal("%reserved_smem_offset_end")) ^
+    (Literal("%reserved_smem_offset_cap")) ^
+    (Literal("%reserved_smem_offset_") + rangeNum(0, 1)) ^
+    (Literal("%total_smem_size")) ^
+    (Literal("%aggr_smem_size")) ^
+    (Literal("%dynamic_smem_size")) ^
+    (Literal("%current_graph_exec"))
+)
+
+REGISTER_LIKE = (SPECIAL_REGISTER ^ IDENTIFIER)
+
+INSTR_OPERAND = Combine(
+    REGISTER_LIKE ^
+    (Literal("[") + EXPR + Literal("]"))
+)
+
+INSTRUCTION = Group(
+    Combine(IDENTIFIER + Literal(":")) ^
+    (
+        Optional(Literal("@") + Optional("!") + REGISTER_LIKE) + 
+        DelimitedList(IDENTIFIER, ".", True, min=1) +
+        Optional(Group(DelimitedList(INSTR_OPERAND))) +
+        Suppress(";")
+    )
 )
 
 KERNEL = (
@@ -105,7 +162,9 @@ PTX = (
     KERNEL
 )
 
-PTX.parseString("""
+
+
+kern = """
 .entry square_kernel(
 	.param .u64 square_kernel_param_0,
 	.param .u64 square_kernel_param_1,
@@ -129,14 +188,20 @@ $L__BB0_2:
 	ld.param.u64 	%rd4, [square_kernel_param_1];
 	cvta.to.global.u64 	%rd5, %rd4;
 	cvta.to.global.u64 	%rd6, %rd3;
-	mul.wide.s32 	%rd7, %r5, 4;
 	add.s64 	%rd1, %rd5, %rd7;
 	add.s64 	%rd2, %rd6, %rd7;
 	ld.global.f32 	%f1, [%rd2];
-	mul.rn.f32 	%f2, %f1, %f1;
 	st.global.f32 	[%rd1], %f2;
 $L__BB0_1:
 	ret;
 }
-""", True).pprint()
+"""
+
+for i in range(10):
+    PTX.parseString(kern, True)
+
+print(PTX.parseString(kern, True).pprint())
+
+#	mul.wide.s32 	%rd7, %r5, 4;
+#	mul.rn.f32 	%f2, %f1, %f1;
 
