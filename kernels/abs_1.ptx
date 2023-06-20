@@ -1,0 +1,42 @@
+.version 7.5
+.target sm_75
+.address_size 64
+
+        // .globl       _Z4E_n2PfPKfS1_
+
+.visible .entry _Z4E_n2PfPKfS1_(
+        .param .u64 _Z4E_n2PfPKfS1__param_0,
+        .param .u64 _Z4E_n2PfPKfS1__param_1,
+        .param .u64 _Z4E_n2PfPKfS1__param_2
+)
+{
+        .reg .pred      %p<3>;
+        .reg .f32       %f<14>;
+        .reg .b64       %rd<7>;
+
+
+        ld.param.u64    %rd1, [_Z4E_n2PfPKfS1__param_0];
+        ld.param.u64    %rd2, [_Z4E_n2PfPKfS1__param_1];
+        ld.param.u64    %rd3, [_Z4E_n2PfPKfS1__param_2];
+        cvta.to.global.u64      %rd4, %rd1;
+        cvta.to.global.u64      %rd5, %rd3;
+        cvta.to.global.u64      %rd6, %rd2;
+        ld.global.f32   %f1, [%rd6];
+        ld.global.f32   %f2, [%rd5];
+        mov.f32         %f3, 0f00000000;
+        sub.f32         %f4, %f3, %f1;
+        max.f32         %f5, %f4, %f3;
+        setp.eq.f32     %p1, %f5, 0f00000000;
+        selp.f32        %f6, 0f00000000, 0f3F800000, %p1;
+        add.f32         %f7, %f2, 0f3F800000;
+        add.f32         %f8, %f7, %f7;
+        mul.f32         %f9, %f8, %f6;
+        sub.f32         %f10, %f3, %f9;
+        max.f32         %f11, %f1, %f3;
+        setp.eq.f32     %p2, %f11, 0f00000000;
+        selp.f32        %f12, 0f00000000, 0f3F800000, %p2;
+        fma.rn.f32      %f13, %f8, %f12, %f10;
+        st.global.f32   [%rd4], %f13;
+        ret;
+
+}
