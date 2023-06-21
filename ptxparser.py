@@ -1,5 +1,5 @@
 from pyparsing import *
-
+ParserElement.enable_packrat()
 
 
 # 4.4. Identifiers
@@ -56,7 +56,7 @@ PARAM = Group(
     Suppress(".param") + TYPE + Optional(Literal(".ptr") + Optional(SPACE) + ALIGN)
     + TYPENAME
 )
-ARGLIST = Group(DelimitedList(PARAM))
+ARGLIST = Group(delimitedList(PARAM))
 
 KERNELDEF = (
     Literal(".entry") + IDENTIFIER + Suppress("(") + ARGLIST + Suppress(")")
@@ -144,8 +144,8 @@ INSTRUCTION = Group(
     Combine(IDENTIFIER + Literal(":")) ^
     (
         Optional(Literal("@") + Optional("!") + REGISTER_LIKE) + 
-        DelimitedList(IDENTIFIER, ".", True, min=1) +
-        Optional(Group(DelimitedList(INSTR_OPERAND))) +
+        delimitedList(IDENTIFIER, ".", True, min=1) +
+        Optional(Group(delimitedList(INSTR_OPERAND))) +
         Suppress(";")
     )
 )
