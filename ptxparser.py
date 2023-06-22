@@ -15,9 +15,9 @@ F32_LIT = Regex(r"0[fF][0-9a-fA-F]{8}")
 F64_LIT = Regex(r"0[dD][0-9a-fA-F]{16}")
 
 BOOL_LIT = Literal("True") | Literal("False")
-INT_LIT = HEX_LIT | OCT_LIT | BIN_LIT | DEC_LIT
-FLT_LIT = F32_LIT | F64_LIT
-NUMERIC = BOOL_LIT | INT_LIT | FLT_LIT
+INT_LIT = HEX_LIT ^ OCT_LIT ^ BIN_LIT ^ DEC_LIT
+FLT_LIT = F32_LIT ^ F64_LIT
+NUMERIC = BOOL_LIT ^ INT_LIT ^ FLT_LIT
 INTEGER = pyparsing_common.integer
 
 EXPR = infixNotation(NUMERIC | IDENTIFIER,
@@ -51,6 +51,25 @@ TYPE = (
 
 SPACE = oneOf(".const .global .local .shared")
 ALIGN = (Literal(".align") + INTEGER)
+
+ATTRIBUTE = (
+    (Literal(".managed") + Optional(Suppress("(") + Group(delimitedList(NUMERIC)) + Suppress(")"))) ^
+    (Literal(".unified") + Optional(Suppress("(") + Group(delimitedList(NUMERIC)) + Suppress(")")))
+)
+
+DERIVATIVE = Group(
+    (Literal(".version") + INTEGER("major") + Literal(".") + INTEGER("minor")) ^
+    (Literal(".target") + delimitedList(IDENTIFIER)) ^
+    (Literal(".address_size") + INTEGER) ^
+    (Literal(".entry")) ^ 
+    (Literal(".func")) ^ 
+    ALIGN ^
+    SPACE ^
+    (Literal(".attribute") + Suppress("(") + Group(ATTRIBUTE) + Suppress(")")) ^
+    (Literal(".noreturn")) ^ 
+    (Literal(".visible"))
+)
+
 TYPENAME = (IDENTIFIER + Optional(Literal("[") + INTEGER + Literal("]")))
 PARAM = Group(
     Suppress(".param") + TYPE + Optional(Literal(".ptr") + Optional(SPACE) + ALIGN)
@@ -58,8 +77,10 @@ PARAM = Group(
 )
 ARGLIST = Group(delimitedList(PARAM))
 
+
 KERNELDEF = (
-    Literal(".entry") + IDENTIFIER + Suppress("(") + ARGLIST + Suppress(")")
+    Literal(".entry") + 
+    IDENTIFIER + Suppress("(") + ARGLIST + Suppress(")")
 )
 
 REGDEF = Group(
@@ -137,6 +158,7 @@ REGISTER_LIKE = (SPECIAL_REGISTER ^ IDENTIFIER)
 
 INSTR_OPERAND = Combine(
     REGISTER_LIKE ^
+    NUMERIC ^
     (Literal("[") + EXPR + Literal("]"))
 )
 
@@ -159,49 +181,126 @@ KERNEL = (
 )
 
 PTX = (
-    KERNEL
-)
+    ZeroOrMore(
+        KERNEL ^ DERIVATIVES
+    )
+).ignore(cppStyleComment)
 
 
+
+# todo: make this more clean.
+"""
+def parse(tokens)
+    token = tokens[0]
+    if token == ".visible":
+        res = parse(tokens[1:])
+        res.visible = True
+    elif token == ".entry":
+        
+    
+        
+        
+        
+        """
 
 kern = """
-.entry square_kernel(
-	.param .u64 square_kernel_param_0,
-	.param .u64 square_kernel_param_1,
-	.param .u32 square_kernel_param_2
+.version 7.5
+.target sm_75
+.address_size 64
+
+        // .globl       _Z4E_n2PfPKfS1_
+
+.visible .entry _Z4E_n2PfPKfS1_(
+        .param .u64 _Z4E_n2PfPKfS1__param_0,
+        .param .u64 _Z4E_n2PfPKfS1__param_1,
+        .param .u64 _Z4E_n2PfPKfS1__param_2
 )
 {
-	.reg .pred 	%p<2>;
-	.reg .b32 	%r<6>;
-	.reg .f32 	%f<3>;
-	.reg .b64 	%rd<8>;
+        .reg .pred      %p<3>;
+        .reg .f32       %f<14>;
+        .reg .b64       %rd<7>;
 
-	ld.param.u32 	%r1, [square_kernel_param_2];
-	mov.u32 	%r2, %tid.x;
-	mov.u32 	%r3, %ctaid.x;
-	mov.u32 	%r4, %ntid.x;
-	mad.lo.s32 	%r5, %r3, %r4, %r2;
-	setp.lt.s32 	%p1, %r5, %r1;
-	bra.uni 	$L__BB0_1;
-$L__BB0_2:
-	ld.param.u64 	%rd3, [square_kernel_param_0];
-	ld.param.u64 	%rd4, [square_kernel_param_1];
-	cvta.to.global.u64 	%rd5, %rd4;
-	cvta.to.global.u64 	%rd6, %rd3;
-	add.s64 	%rd1, %rd5, %rd7;
-	add.s64 	%rd2, %rd6, %rd7;
-	ld.global.f32 	%f1, [%rd2];
-	st.global.f32 	[%rd1], %f2;
-$L__BB0_1:
-	ret;
+
+        ld.param.u64    %rd1, [_Z4E_n2PfPKfS1__param_0];
+        ld.param.u64    %rd2, [_Z4E_n2PfPKfS1__param_1];
+        ld.param.u64    %rd3, [_Z4E_n2PfPKfS1__param_2];
+        cvta.to.global.u64      %rd4, %rd1;
+        cvta.to.global.u64      %rd5, %rd3;
+        cvta.to.global.u64      %rd6, %rd2;
+        ld.global.f32   %f1, [%rd6];
+        ld.global.f32   %f2, [%rd5];
+        mov.f32         %f3, 0f00000000;
+        sub.f32         %f4, %f3, %f1;
+        max.f32         %f5, %f4, %f3;
+        setp.eq.f32     %p1, %f5, 0f00000000;
+        selp.f32        %f6, 0f00000000, 0f3F800000, %p1;
+        add.f32         %f7, %f2, 0f3F800000;
+        add.f32         %f8, %f7, %f7;
+        mul.f32         %f9, %f8, %f6;
+        sub.f32         %f10, %f3, %f9;
+        max.f32         %f11, %f1, %f3;
+        setp.eq.f32     %p2, %f11, 0f00000000;
+        selp.f32        %f12, 0f00000000, 0f3F800000, %p2;
+        fma.rn.f32      %f13, %f8, %f12, %f10;
+        st.global.f32   [%rd4], %f13;
+        ret;
 }
 """
 
-for i in range(10):
-    PTX.parseString(kern, True)
-
 print(PTX.parseString(kern, True).pprint())
 
-#	mul.wide.s32 	%rd7, %r5, 4;
-#	mul.rn.f32 	%f2, %f1, %f1;
 
+
+tests = [
+"""
+.func foo ( .param .b32 N, .param .b32 buffer[32] )
+{
+    .reg .u32  %n, %r;
+    .reg .f32  %f;
+    .reg .pred %p;
+
+    ld.param.u32 %n, [N];
+    mov.u32      %r, buffer;  // forces buffer to .local state space
+Loop:
+    setp.eq.u32  %p, %n, 0;
+@%p: bra         Done;
+    ld.local.f32 %f, [%r];
+    add.u32      %r, %r, 4;
+    sub.u32      %n, %n, 1;
+    bra          Loop;
+Done:
+    ret;
+}
+""",
+"""
+.entry foo ( .param .u32 param1,
+             .param .u32 .ptr.global.align 16 param2,
+             .param .u32 .ptr.const.align 8 param3,
+             .param .u32 .ptr.align 16 param4  // generic address
+                                               // pointer
+) { }
+""",
+"""
+// pass object of type struct { double d; int y; };
+.func foo ( .reg .b32 N, .param .align 8 .b8 buffer[12] )
+{
+    .reg .f64 %d;
+    .reg .s32 %y;
+
+    ld.param.f64 %d, [buffer];
+    ld.param.s32 %y, [buffer+8];
+}
+
+// code snippet from the caller
+// struct { double d; int y; } mystruct; is flattened, passed to foo
+.func bar () {
+    .reg .f64 dbl;
+    .reg .s32 x;
+    .param .align 8 .b8 mystruct;
+    st.param.f64 [mystruct+0], dbl;
+    st.param.s32 [mystruct+8], x;
+    call foo, (4, mystruct);
+
+}
+"""
+]

@@ -4,7 +4,9 @@
 
         // .globl       _Z4E_n2PfPKfS1_
 
-.visible .entry _Z4E_n2PfPKfS1_(
+.visible
+.entry
+_Z4E_n2PfPKfS1_(
         .param .u64 _Z4E_n2PfPKfS1__param_0,
         .param .u64 _Z4E_n2PfPKfS1__param_1,
         .param .u64 _Z4E_n2PfPKfS1__param_2
@@ -38,5 +40,4 @@
         fma.rn.f32      %f13, %f8, %f12, %f10;
         st.global.f32   [%rd4], %f13;
         ret;
-
 }
